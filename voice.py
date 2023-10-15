@@ -14,7 +14,7 @@ if not os.path.isfile(local_file):
 
 model = torch.package.PackageImporter(local_file).load_pickle("tts_models", "model")
 model.to(device)  # gpu or cpu
-sample_rate = 48000
+sample_rate = 24000
 speaker = 'baya'
 put_accent = True
 put_yo = True

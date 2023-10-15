@@ -1,5 +1,4 @@
 torch
 vosk
 sounddevice
-numpy
-fuzzywuzzy
+openai

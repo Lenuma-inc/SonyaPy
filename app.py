@@ -1,27 +1,15 @@
 import voice
 import sounddevice as sd
 import vosk
-from fuzzywuzzy import fuzz
-import random
 import json
 import queue
-from subprocess import call
-import webbrowser
+import threading
 
 voice.bot_speak("Соня вас внимательно слушает ...")
 
-VA_CMD_LIST = {
-    "help": ('список команд', 'команды', 'что ты умеешь', 'твои навыки', 'навыки'),
-    "joke": ('расскажи анекдот', 'рассмеши', 'шутка', 'расскажи шутку', 'пошути', 'развесели'),
-    "browser": ('браузер', 'запусти браузер'),
-    "volume up": ('сделай громче','увеличь громкость'),
-    "volume down": ('сделай тише','уменши громкость'),
-    "volume full": ('верни звук','включи звук'),
-    "volume mute": ('выключи звук','отключи звук'),
-    "reboot": ('перезагрузи','перезагрузка'),
-    "shutdown": ('выключи компьютер')
-}
-
+messages = [
+    {"role": "system", "content": "Ты голосовой ассистент по имени Соня."}
+]
 q = queue.Queue()
 
 model = vosk.Model("model_small_ru")
@@ -53,7 +41,12 @@ def main():
             if rec.AcceptWaveform(data):
                 data = json.loads(rec.Result())["text"]
                 recognize(data)
-                filter_cmd(data)
+                clear_text(data)
+
+
+def update_chat(messages, role, content):
+    messages.append({"role": role, "content": content})
+    return messages
 
 
 # преобразование текста в речь
@@ -61,76 +54,33 @@ def recognize(data):
     print("Пользователь сказал: " + data)
     if data.startswith("соня"):
         # обращаются к ассистенту
-        cmd = recognize_cmd(filter_cmd(data))
-       # print("Сервер получил: " + cmd)
-        if cmd['cmd'] not in VA_CMD_LIST.keys():
-            voice.bot_speak("Что?")
+        text = clear_text(data)
+        print("Сервер получил: " + text)
+        update_chat(messages, "user", text)
+        completion = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=messages
+        )
+        response = completion.choices[0].message.content
+        if response != None:
+            answer = response.lower()
+            print("Сервер ответил: " + answer)
+            voice.bot_speak(answer)
         else:
-            execute_cmd(cmd['cmd'])
-
-
-def recognize_cmd(cmd: str):
-    rc = {'cmd': '', 'percent': 0}
-    for c, v in VA_CMD_LIST.items():
-
-        for x in v:
-            vrt = fuzz.ratio(cmd, x)
-            if vrt > rc['percent']:
-                rc['cmd'] = c
-                rc['percent'] = vrt
-
-    return rc
-
-def execute_cmd(cmd: str):
-    if cmd == 'help':
-        # help
-        text = "Я умею: ..."
-        text += "рассказывать анекдоты ..."
-        text += "управлять громкостью"
-        text += "выключать и перезагружать компьютер,"
-        text += "и открывать браузер"
-        voice.bot_speak(text)
-        pass
-
-    elif cmd == 'joke':
-        jokes = ['Как смеются программисты? ... ехе ехе ехе',
-                 'ЭсКьюЭль запрос заходит в бар, подходит к двум столам и спрашивает .. «м+ожно присоединиться?»',
-                 'Программист это машина для преобразования кофе в код']
-
-        voice.bot_speak(random.choice(jokes))
-
-    elif cmd == 'browser':
-      webbrowser.open("google.com")
-      voice.bot_speak("открываю")
-
-    elif cmd == 'volume up':
-      call(["amixer", "-D", "pulse", "sset", "Master", "10%+"])
-      voice.bot_speak("громкость увеличина на десять процентов")
-
-    elif cmd == 'volume down':
-      call(["amixer", "-D", "pulse", "sset", "Master", "10%-"])
-      voice.bot_speak("громкость уменьшина на десять процентов")
-
-    elif cmd == 'volume mute':
-      call(["amixer", "-D", "pulse", "sset", "Master", "0%"])
-      voice.bot_speak("громкость отключена")
-
-    elif cmd == 'volume full':
-      call(["amixer", "-D", "pulse", "sset", "Master", "100%"])
-      voice.bot_speak("громкость включена")
-
-    elif cmd == 'reboot':
-      call(["reboot"])
-
-    elif cmd == 'shutdown':
-      call(["shutdown", "-f", "now"])
+            voice.bot_speak("Сервер ничего не ответил")
 
 # очистка текста от имени бота
-def filter_cmd(data):
-    cmd = data
-    cmd = cmd.replace('соня', '').strip()
-    cmd = cmd.replace('  ', ' ').strip()
-    return cmd
+def clear_text(data):
+    text = data
+    text = text.replace('соня', '').strip()
+    text = text.replace('  ', ' ').strip()
+    return text
+
+
+def start_thread():
+    my_thread = threading.Thread(target=main, args=())
+    my_thread.start()
+
 
 while True:
-    main()
+    start_thread()
